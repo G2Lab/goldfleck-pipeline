@@ -87,7 +87,6 @@ module load bwa/0.7.18-GCCcore-12.3.0
 picard=$EBROOTPICARD/picard.jar
 
 if [[ ! -f "$univec" ]]; then
-    echo file $univec
     univec=$(realpath UniVec_Core)
     echo "Status: UniVec_Core not found in current working directory, downloading from ncbi..."
     curl https://ftp.ncbi.nlm.nih.gov/pub/UniVec/UniVec_Core > $univec
@@ -105,21 +104,29 @@ if [[ ! -f "$univec.bwt" ]]; then
     bwa index $univec   # -> cwd/*
 fi
 
-mkdir tmp
-bwa aln -n 1 -t 4 $univec $read1 > tmp/samplePair1.sai  # -> cwd/tmp/samplePair1.sai
-bwa aln -n 1 -t 4 $univec $read2 > tmp/samplePair2.sai  # -> cwd/samplePair2.sai
-bwa sampe $univec tmp/samplePair1.sai tmp/samplePair2.sai $read1 $read2 | samtools view -bS > tmp/univec_aligned.bam    # cwd/univec_aligned.bam
+tmp="tmp-$SLURM_JOB_ID"
+mkdir $tmp
+bwa aln -n 1 -t 4 $univec $read1 > $tmp/samplePair1.sai  # -> cwd/tmp/samplePair1.sai
+bwa aln -n 1 -t 4 $univec $read2 > $tmp/samplePair2.sai  # -> cwd/samplePair2.sai
+bwa sampe $univec $tmp/samplePair1.sai $tmp/samplePair2.sai $read1 $read2 | samtools view -bS > $tmp/univec_aligned.bam    # cwd/univec_aligned.bam
 
-samtools view -h -f 4 tmp/univec_aligned.bam | awk '{print $1}' > tmp/univec_unmapped.txt
-java -Xmx200g -jar $picard FilterSamReads -VALIDATION_STRINGENCY LENIENT -I tmp/univec_aligned.bam -O tmp/output.bam -READ_LIST_FILE tmp/univec_unmapped.txt -FILTER includeReadList
+samtools view -h -f 4 $tmp/univec_aligned.bam | awk '{print $1}' > $tmp/univec_unmapped.txt
+java -Xmx200g -jar $picard FilterSamReads -VALIDATION_STRINGENCY LENIENT -I $tmp/univec_aligned.bam -O $tmp/output.bam -READ_LIST_FILE $tmp/univec_unmapped.txt -FILTER includeReadList
 
-samtools sort -n tmp/output.bam -o tmp/output.s.bam
+samtools sort -n $tmp/output.bam -o $tmp/output.s.bam
 mkdir fastqs
-samtools fastq -n tmp/output.s.bam -1 fastqs/paired1.fq -2 fastqs/paired2.fq
+
+read1=$(basename $read1)
+read2=$(basename $read2)
+paired1="${read1%.*}-paired1.fq"
+paired2="${read2%.*}-paired2.fq"
+read1=$(realpath fastqs/$paired1)
+read2=$(realpath fastqs/$paired2)
+
+samtools fastq -n $tmp/output.s.bam -1 $read1 -2 $read2
 rm -rf tmp
 
-read1=$(realpath fastqs/paired1.fq)
-read2=$(realpath fastqs/paired2.fq)
+
 
 ####################################################
 # 4. create & run slurm scripts
