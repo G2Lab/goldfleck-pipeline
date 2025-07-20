@@ -54,11 +54,11 @@ def get_wgsim_cmd_str(outdir: Path, refseq: Path, refseq_base: str, num_read_pai
     assert mutation_rate <= 1 and mutation_rate >= 0, "error rate must be in [0, 1]"
 
     base_error_rate = 0.020
-    outer_dist      = 350
-    stdev           = 50
-    # num_read_pairs  = 1_000_000
-    len_first_read  = 70
-    len_second_read = 70
+    outer_dist      = 100
+    stdev           = 30
+    # num_read_pairs  = 1_000_000  #
+    len_first_read  = 150
+    len_second_read = 150
     
     fastq_path_base = str(outdir/"fastqs"/refseq_base/refseq_base) + f"-mut{mutation_rate}-"
 

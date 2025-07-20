@@ -14,7 +14,7 @@
 #
 # Creates N jobs for N references that run in parallel
 # By Akash Pandit
-# Last edited: July 3rd, 2025
+# Last edited: July 20th, 2025
 #
 # Workflow:
 # 1. parse command line arguments
@@ -28,12 +28,13 @@
 
 # Usage message
 usage() {
-    echo "Usage: $0 -1 <read1.fastq.gz> -2 <read2.fastq.gz> -d <refdirs> [-u <univec>]"
+    echo "Usage: $0 -1 <read1.fastq.gz> -2 <read2.fastq.gz> -d <refdirs> [-u <univec>] [-o <outdir>]"
     echo ""
     echo "  -1  Path to R1 FASTQ file"
     echo "  -2  Path to R2 FASTQ file"
     echo "  -d  Directory containing reference directories (each containing the ref FASTA file)"
     echo "  -u  Path to UniVec (or UniVec Core) fasta file, if present"
+    echo "  -o  Path to proposed output directory"
     echo "  -h  Show this help message"
     exit 1
 }
@@ -43,14 +44,16 @@ usage() {
 read1=""
 read2=""
 refdirs=""
+outdir=""
 
 # Parse flags
-while getopts ":1:2:d:u:h" opt; do
+while getopts ":1:2:d:u:o:h" opt; do
     case $opt in
         1) read1="$OPTARG" ;;
         2) read2="$OPTARG" ;;
         d) refdirs="$OPTARG" ;;
         u) univec="$OPTARG" ;;
+        o) outdir="$OPTARG" ;;
         h) usage ;;
         \?) echo "Error: Invalid option -$OPTARG" >&2; usage ;;
         :) echo "Error: Option -$OPTARG requires an argument." >&2; usage ;;
@@ -74,7 +77,11 @@ elif [[ -n "$univec" && ! -f "$univec" ]]; then
     echo -e "\nError: invalid univec path passed. File $univec does not exist.\n" >&2
     exit 1
 fi
-refdirs=$(realpath $refdirs)  # 
+refdirs=$(realpath $refdirs)
+
+if [[ -z "$outdir" ]]; then
+    outdir="align-output"
+fi
 
 ####################################################
 # 2. load required modules & other dependencies
@@ -104,48 +111,39 @@ if [[ ! -f "$univec.bwt" ]]; then
     bwa index $univec   # -> cwd/*
 fi
 
-tmp="tmp-$SLURM_JOB_ID"
-mkdir $tmp
-bwa aln -n 1 -t 4 $univec $read1 > $tmp/samplePair1.sai  # -> cwd/tmp/samplePair1.sai
-bwa aln -n 1 -t 4 $univec $read2 > $tmp/samplePair2.sai  # -> cwd/samplePair2.sai
+tmp="/nfs/scratch/$SLURM_JOB_ID"
+mkdir -p $tmp
+bwa aln -n 1 -t 4 $univec $read1 > $tmp/samplePair1.sai
+bwa aln -n 1 -t 4 $univec $read2 > $tmp/samplePair2.sai
 bwa sampe $univec $tmp/samplePair1.sai $tmp/samplePair2.sai $read1 $read2 | samtools view -bS > $tmp/univec_aligned.bam    # cwd/univec_aligned.bam
 
 samtools view -h -f 4 $tmp/univec_aligned.bam | awk '{print $1}' > $tmp/univec_unmapped.txt
 java -Xmx200g -jar $picard FilterSamReads -VALIDATION_STRINGENCY LENIENT -I $tmp/univec_aligned.bam -O $tmp/output.bam -READ_LIST_FILE $tmp/univec_unmapped.txt -FILTER includeReadList
 
 samtools sort -n $tmp/output.bam -o $tmp/output.s.bam
-mkdir fastqs
+mkdir -p $outdir/fastqs
 
-read1=$(basename $read1)
-read2=$(basename $read2)
-paired1="${read1%.*}-paired1.fq"
-paired2="${read2%.*}-paired2.fq"
-read1=$(realpath fastqs/$paired1)
-read2=$(realpath fastqs/$paired2)
+read1=$outdir/fastqs/paired1.fq
+read2=$outdir/fastqs/paired2.fq
 
 samtools fastq -n $tmp/output.s.bam -1 $read1 -2 $read2
-rm -rf tmp
-
-
 
 ####################################################
 # 4. create & run slurm scripts
 ####################################################
 
-if [[ ! -d "./slurm" ]]; then
-    mkdir ./slurm
-fi
-
+mkdir $outdir/slurm
+mkdir $outdir/bamfiles
 
 for refdir in $refdirs/*; do
     refdir_name=$(basename $refdir)
-    scriptname=slurm/slurm-align-$refdir_name.sh
+    scriptname=$outdir/slurm/slurm-align-$refdir_name.sh
 
     echo "#!/bin/bash
 #SBATCH -p gglab_cpu 
 #SBATCH -J bam_$refdir_name -t 240:00:00
-#SBATCH -c 16 --mem-per-cpu=10000
-#SBATCH -o slurm/slurm-%j.out
+#SBATCH -c 16 --mem-per-cpu=10G
+#SBATCH -o $outdir/slurm/slurm-%j.out
 
 module load samtools/1.21
 
@@ -178,6 +176,6 @@ if [  \${no_index_found} -eq 1 ];then
 fi
 
 #map the fastqs to reference genome
-bwa mem -t 16 -M \$ref ${read1} ${read2} | samtools view -bSho ${refdir_name}.bam -" > $scriptname
+bwa mem -t 16 -M \$ref ${read1} ${read2} | samtools view -bSho $outdir/bamfiles/${refdir_name}.bam -" > $scriptname
     sbatch $scriptname
 done 
