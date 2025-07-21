@@ -1,6 +1,6 @@
 # Multi-genome Alignment Pipeline
 
-A pipeline designed to
+A pipeline designed to:
 - Simulate a set of paired-end reads with varying mutation rates from a set of reference genomes using `wgsim`
 - Align simulated reads to each reference genome and generate `bam` files for each pair of reads, filtering out known contaminants (e.g. PCR primers) using NCBI's UniVec database
 - Analyze bamfile statistics and demonstrate that bamfile from a given species `A` can be uniquely mapped back to species `A`, and not the other species
@@ -70,9 +70,11 @@ wgsim-out/
 │   │   │   ├── slurm-refseq.out
 │   │   │   ├── wgsim-refseqmut[r].log  (note: logs include data on inserted mutations)
 │   │   │   ... (for each mutation rate)
+│   │   │
 │   │   ├── refseq-mut[r]-1.fq
 │   │   ├── refseq-mut[r]-2.fq
 │   │   ... (for each mutation rate)
+│   │
 │   ... (for each refseq)
 │
 ├── refseq-inputs/ (symbolic link that points to actual -d location)
