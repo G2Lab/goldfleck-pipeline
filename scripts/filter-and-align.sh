@@ -93,8 +93,11 @@ module load bwa/0.7.18-GCCcore-12.3.0
 
 picard=$EBROOTPICARD/picard.jar
 
+if [[ -z "$univec" ]]; then
+    echo "Status: UniVec argument ( -u <filepath> ) not specified, searching for UniVec_Core in current working directory..."
+fi
+univec=$(realpath UniVec_Core)
 if [[ ! -f "$univec" ]]; then
-    univec=$(realpath UniVec_Core)
     echo "Status: UniVec_Core not found in current working directory, downloading from ncbi..."
     curl https://ftp.ncbi.nlm.nih.gov/pub/UniVec/UniVec_Core > $univec
     if [ $? -ne 0 ]; then

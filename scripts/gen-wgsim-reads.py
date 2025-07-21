@@ -35,10 +35,10 @@ def parse_cli_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         '-o', '--out-dir',  type=Path,
-        metavar='<path>', action='store', required=False, default=cwd/"output",
-        help="desired output directory path, defaults to ./output"
+        metavar='<path>', action='store', required=False, default=cwd/"wgsim-output",
+        help="desired output directory path, defaults to ./wgsim-output"
     )
-    parser.add_argument('-s', '--seed', type=int, required=False, help='set random seed for wgsim')
+    parser.add_argument('-s', '--seed', metavar="<seed>", type=int, required=False, help='set random seed for wgsim')
     
     return parser.parse_args()
 
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     seed: int       = args.seed
     read_pairs      = 1_000_000
     
-    unzipped_globs = ['*.fasta', '*.fas', '*.fa', '*.fna']
+    unzipped_globs = ['*/*.fasta', '*/*.fas', '*/*.fa', '*/*.fna']
     zipped_globs = [ext + '.gz' for ext in unzipped_globs]
 
     # unzip zipped genomes
