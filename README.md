@@ -1,5 +1,11 @@
 # Multi-genome Alignment Pipeline
 
+## !! NOTE !!: currently outdated, following changes in place:
+- `wgsim` used to simulate 1 paired-end read set with a user-defined blend of reference sequence : proportion (percent) pairs
+- analysis moved from basic analysis of flagstat output to more comprehensive analysis of map quality, mismatch number, and alignment score from bamfiles
+- WIP: porting to single nextflow script for ease of use
+- TBD: rewrite this document for said nextflow script
+
 A pipeline designed to:
 - Simulate a set of paired-end reads with varying mutation rates from a set of reference genomes using `wgsim`
 - Align simulated reads to each reference genome and generate `bam` files for each pair of reads, filtering out known contaminants (e.g. PCR primers) using NCBI's UniVec database
