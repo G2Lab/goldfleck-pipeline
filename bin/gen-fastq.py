@@ -7,6 +7,14 @@ from pathlib import Path
 from sys import stderr
 
 
+"""
+Generates simulated reads with a weighted set of reference genomes (fasta files).
+
+By: Akash Pandit
+Last Edited: August 1st, 2025
+"""
+
+
 def parse_ref_percent(refpct: str):
     try:
         ref, pct = refpct.split(":")
