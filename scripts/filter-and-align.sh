@@ -13,8 +13,9 @@
 # to all reference genomes found in the passed directory
 #
 # Creates N jobs for N references that run in parallel
-# By Akash Pandit
-# Last edited: July 20th, 2025
+# Originally by Gamze Gursoy
+# Modified by Akash Pandit
+# Last edited: July 22th, 2025
 #
 # Workflow:
 # 1. parse command line arguments
@@ -95,8 +96,8 @@ picard=$EBROOTPICARD/picard.jar
 
 if [[ -z "$univec" ]]; then
     echo "Status: UniVec argument ( -u <filepath> ) not specified, searching for UniVec_Core in current working directory..."
+    univec=$(realpath UniVec_Core)
 fi
-univec=$(realpath UniVec_Core)
 if [[ ! -f "$univec" ]]; then
     echo "Status: UniVec_Core not found in current working directory, downloading from ncbi..."
     curl https://ftp.ncbi.nlm.nih.gov/pub/UniVec/UniVec_Core > $univec
