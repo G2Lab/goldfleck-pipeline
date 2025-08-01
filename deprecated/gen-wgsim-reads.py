@@ -43,12 +43,6 @@ def parse_cli_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def trim_extension(fp: str) -> str:
-    if '.' in fp:
-        return '.'.join(fp.split('.')[:-1])
-    return fp
-
-
 def get_wgsim_cmd_str(outdir: Path, refseq: Path, refseq_base: str, num_read_pairs: int, mutation_rate: float, random_seed: int) -> str:
     refseq_name = str(refseq.absolute())
     assert mutation_rate <= 1 and mutation_rate >= 0, "error rate must be in [0, 1]"
@@ -84,7 +78,7 @@ if __name__ == "__main__":
     refdir: Path    = args.ref_dir
     outdir: Path    = args.out_dir
     seed: int       = args.seed
-    read_pairs      = 1_000_000
+    read_pairs      = 10_000_000
     
     unzipped_globs = ['*/*.fasta', '*/*.fas', '*/*.fa', '*/*.fna']
     zipped_globs = [ext + '.gz' for ext in unzipped_globs]
@@ -114,7 +108,7 @@ if __name__ == "__main__":
 
     # create & batch slurm scripts
     for refseq in refseqs:
-        refseq_base = trim_extension(refseq.name)
+        refseq_base = refseq.stem
         logdir = outdir/"fastqs"/refseq_base/"logs"
         os.makedirs(logdir, exist_ok=True)
 
@@ -122,8 +116,6 @@ if __name__ == "__main__":
             "#!/usr/bin/bash",
             "#",
             "#SBATCH -n 1 --mem 20000 -t 1:00:00",
-            "#SBATCH --mail-type=ALL",
-            "#SBATCH --mail-user=" + os.getlogin() + "@nygenome.org",
            f"#SBATCH --output={str(logdir)}/slurm-{refseq_base}.out",
             "",
             "# Generate sample reads for reference file " + refseq.name,
