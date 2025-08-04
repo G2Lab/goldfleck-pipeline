@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import csv
 import subprocess
 
 from pathlib import Path
@@ -15,15 +16,43 @@ Last Edited: August 1st, 2025
 """
 
 
-def parse_ref_percent(refpct: str):
-    try:
-        ref, pct = refpct.split(":")
-        pct = int(pct)
-        if not 0 <= pct <= 100:
-            raise ValueError
-        return Path(ref), pct
-    except Exception:
-        raise argparse.ArgumentTypeError("Expected format: path:percent (e.g. ref.fa:30)")
+def parse_ref_percent_tsv(refpct_tsv: str) -> list[tuple[Path, int]]:
+    if not Path(refpct_tsv).is_file():
+        print("[Error] no file exists at path", refpct_tsv, file=stderr)
+        exit(1)
+
+    with open(refpct_tsv, newline='') as f:
+        reader = csv.reader(f, delimiter='\t')
+        valid_pairs: list[tuple[Path, int]] = []
+        percent_sum = 0
+        for row_num, row in enumerate(reader, start=1):
+            if not row:
+                continue
+            try:
+                refpath, percent = Path(row[0]), int(row[1])
+                row_num += 1
+                percent_sum += percent
+            except TypeError:
+                print(f"[Error] invalid format on row {row_num}, expected 'filepath[tab]integer' and got '{row[0]}[tab]{row[1]}'", 
+                      file=stderr)
+                exit(1)
+            if not refpath.is_file():
+                print("[Error] no file exists at path", str(refpath), "in", refpct_tsv, file=stderr)
+                exit(1)
+            if refpath.suffix not in (".fa", ".fasta", '.fna'):
+                print("[Error] expected reference with extension .fa, .fna, or .fasta, got file", 
+                      refpath.name, "in", refpct_tsv, file=stderr)
+                exit(1)
+            if percent <= 0 or percent > 100:
+                print("[Error] expected percent in the range (0, 100], got", percent, "on", row_num, "in", refpct_tsv, file=stderr)
+                exit(1)
+            if percent_sum > 100:
+                print("[Error] percent sum in tsv exceeded 100 at line", row_num, "on", row_num, "in", refpct_tsv, file=stderr)
+                exit(1)
+
+            valid_pairs.append((refpath, percent))
+            
+    return valid_pairs
 
 
 if __name__ == "__main__":
@@ -34,36 +63,24 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="""
         Generates a set of paired-end FASTQs with n read pairs. Users provide a set of references and what
-        percentage of the FASTQ set should come from said reference, passed as -r [refname]:[int-percent].
+        percentage of the FASTQ set should come from said reference, passed as a tsv file with no header.
         percents must add up to 100 or the script will prematurely exit.
         """)
 
     parser.add_argument("-n", "--num-pairs", type=int, action="store", required=False, default=1_000_000,
                         help="number of read pairs per paired end. Total reads across both R1 and R2 will be 2x this value.")
-    parser.add_argument("-r", "--refpct", type=parse_ref_percent, action="append", required=True,
+    parser.add_argument("-r", "--refpct-tsv", type=parse_ref_percent_tsv, action="store", required=True,
                         help="path to reference FASTA and associated percent (weight) in FASTQs. Repeatable.")
     parser.add_argument("-o", "--outdir", type=Path, action="store", required=False, default=Path("./output-wgsim").resolve())
-    parser.add_argument("-b", "--blend-name", type=str, action="store", required=False)
+    parser.add_argument("-b", "--blend-name", type=str, action="store", required=True)
     args = parser.parse_args()
 
     num_pairs: int = args.num_pairs
-    refpercents: list[tuple[Path, int]] = [(path, pct) for path, pct in args.refpct if pct > 0]
+    refpercents: list[tuple[Path, int]] = args.refpct_tsv
     outdir: Path = args.outdir
+    blend_name: str = args.blend_name
 
-    # argument validation
-    refpct_total = sum(percent for _, percent in refpercents)
-    if refpct_total != 100:
-        print("[Error] expected percent sum to == 100, got", refpct_total, file=stderr)
-        exit(1)
 
-    for refpath, _ in refpercents:
-        if not refpath.is_file():
-            print("[Error] no file exists at path", str(refpath), file=stderr)
-            exit(1)
-        if refpath.suffix not in (".fa", ".fasta", '.fna'):
-            print("[Error] expected reference with extension .fa, .fna, or .fasta, got file", refpath.name, file=stderr)
-
-    
     """
     2. set up variables
     """
@@ -81,17 +98,7 @@ if __name__ == "__main__":
     refreads = [(refpath, round(num_pairs / 100) * percent) for refpath, percent in refpercents]
     # convert percent -> number of read pairs
 
-    fastqdir  = outdir/"fastqs"
-    scriptdir = outdir/"scripts"
-    logdir    = outdir/"logs"
-
     outdir.mkdir(exist_ok=True)
-    fastqdir.mkdir(exist_ok=True)
-    scriptdir.mkdir(exist_ok=True)
-    logdir.mkdir(exist_ok=True)
-
-    fastqdir  = str(fastqdir)
-    logdir    = str(logdir)
     this_script_path = str(Path(__file__).resolve())
 
 
@@ -104,6 +111,7 @@ if __name__ == "__main__":
 
         refseq_str = str(refseq)
         num_pairs_per_ref = str(num_pairs_per_ref)
+        outdir_fastq_path_stem = str(outdir.resolve()/refseq.stem)
 
         wgsim_flags = " ".join([
             '-e', BASE_ERR_RATE,
@@ -119,7 +127,7 @@ if __name__ == "__main__":
             "#!/bin/bash",
             "",
             "#SBATCH -n 1 --mem=10G -t 1:00:00",
-           f"#SBATCH --output={logdir}/slurm-{refseq.stem}.out",
+        #    f"#SBATCH --output={logdir}/slurm-{refseq.stem}.out",
             "",
             "# Generate sample reads for reference file " + refseq.name,
            f"# Script generated by {this_script_path}",
@@ -127,19 +135,32 @@ if __name__ == "__main__":
             "# load required modules",
             "module load samtools/1.21",
             "",
-           f"wgsim {refseq_str} {refseq.stem}-R1.fastq {refseq.stem}-R2.fastq " + wgsim_flags
+           f"wgsim {refseq_str} {outdir_fastq_path_stem}-R1.fastq {outdir_fastq_path_stem}-R2.fastq " + wgsim_flags
         ])
 
-        slurm_script_fp = scriptdir/f"slurm-{refseq.stem}.sh"
+        slurm_script_fp = outdir/f"slurm-{refseq.stem}.sh"
         with slurm_script_fp.open(mode="w") as fp:
             fp.write(slurm_script)
 
         try:
             result = subprocess.run(["sbatch", slurm_script_fp], capture_output=True, text=True, check=True)
+            subprocess.run(["rm", slurm_script_fp])
         except subprocess.CalledProcessError as err:
             print("Command failed with return code:", err.returncode)
             print("STDERR:\n", err.stderr)
             print("STDOUT:\n", err.stdout)
         print("[gen-fastq] Job submitted:", result.stdout.strip())
 
+
+    """
+    4. write metadata file
+    """
+
+    metadata_fp = outdir/"metadata.tsv"
+
+    with metadata_fp.open("w") as fp:
+        fp.write("bamfile_path\tpercent_of_total_reads\tnumber_of_pairs_generated\n")
+
+        for (reference, percent), (_, pair_count) in zip(refpercents, refreads):
+            fp.write(f"{reference}\t{percent}\t{pair_count}\n")
     
