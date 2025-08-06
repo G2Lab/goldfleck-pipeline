@@ -1,0 +1,34 @@
+#!/bin/bash
+
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=48:00:00
+
+# just gonna assume everything is valid
+sim_refs=$1
+refdirs=$2
+
+PROJ="/gpfs/commons/home/apandit/gghome/lions/"
+
+module load python
+pip install polars
+
+# generate weighted simulated fastqs
+python $PROJ/deprecated/gen-fastq.py -n 100000 -r $sim_refs -o $PROJ/testing/out-wgsim \
+	| grep 'Submitted batch job' | awk '{print $NF}' > $PROJ/testing/out-wgsim/jobids.tmp
+
+# TODO: replace with slurm wait loop
+sleep 5m
+
+# merge simulated fastqs
+cat $PROJ/testing/out-wgsim/*1.fastq > $PROJ/testing/out-wgsim/merged_1.fastq
+cat $PROJ/testing/out-wgsim/*2.fastq > $PROJ/testing/out-wgsim/merged_2.fastq
+
+# align simulated fastqs
+sbatch $PROJ/deprecated/filter-and-align.sh -1 $PROJ/testing/out-wgsim/merged_1.fastq -2 $PROJ/testing/out-wgsim/merged_1.fastq -d $refdirs -u $PROJ/data/univec/UniVec_Core.fa -o $PROJ/testing/out-align
+	| grep 'Submitted batch job' | awk '{print $NF}' > $PROJ/testing/out-align/jobids.tmp
+
+# TODO: replace with slurm wait loop
+sleep 5h
+
+python $PROJ/bin/assign-reads.py -d $PROJ/testing/out-align/bamfiles -o $PROJ/testing/out-assign
