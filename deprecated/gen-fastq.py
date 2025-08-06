@@ -72,13 +72,13 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--refpct-tsv", type=parse_ref_percent_tsv, action="store", required=True,
                         help="path to reference FASTA and associated percent (weight) in FASTQs. Repeatable.")
     parser.add_argument("-o", "--outdir", type=Path, action="store", required=False, default=Path("./output-wgsim").resolve())
-    parser.add_argument("-b", "--blend-name", type=str, action="store", required=True)
+    # parser.add_argument("-b", "--blend-name", type=str, action="store", required=True)
     args = parser.parse_args()
 
     num_pairs: int = args.num_pairs
     refpercents: list[tuple[Path, int]] = args.refpct_tsv
     outdir: Path = args.outdir
-    blend_name: str = args.blend_name
+    # blend_name: str = args.blend_name
 
 
     """

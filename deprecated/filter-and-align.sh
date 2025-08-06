@@ -3,10 +3,9 @@
 #SBATCH --job-name=filter-univec
 #SBATCH --time=48:00:00
 #SBATCH --partition=cpu
-#SBATCH --nodes=1
+#SBATCH --cpus-per-task=2
 #SBATCH --mem=20G
 #SBATCH --mail-type=ALL
-#SBATCH --mail-user=email
 
 # Filter paired end fastq files against univec contaminant
 # database (mark pcr duplicates) and align remaining reads
