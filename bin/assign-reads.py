@@ -122,15 +122,15 @@ if __name__ == "__main__":
 
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--bamdir", type=Path, action="store", required=True)
+    parser.add_argument("-i", "--bamlist", type=Path, action="store", required=True)
     parser.add_argument("-o", "--outdir", type=Path, action="store", required=False, default=Path("output-assign-reads"))
     args = parser.parse_args()
-    bamdir: Path = args.bamdir
+    bamlist: Path = args.bamlist
     outdir: Path = args.outdir
 
     # argument validation
-    if not bamdir.is_dir():
-        print("Error: path", str(bamdir), "is not an existing directory.")
+    if not bamlist.is_file():
+        print("Error: path", str(bamlist), "is not an existing file.")
         exit(1)
 
     outdir.mkdir(exist_ok=True)
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     """
 
 
-    species_paths = list(bamdir.glob("*.bam"))
+    species_paths = [Path(bampath) for bampath in bamlist.read_text().strip().split("\n")]
     species_list  = [path.stem for path in species_paths]
 
     source_df = load_bamfile_df(species_paths[0])
