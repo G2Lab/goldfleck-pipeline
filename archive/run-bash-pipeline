@@ -14,7 +14,7 @@ module load python
 pip install polars
 
 # generate weighted simulated fastqs
-python $PROJ/deprecated/gen-fastq.py -n 100000 -r $sim_refs -o $PROJ/testing/out-wgsim \
+python $PROJ/archive/gen-fastq.py -n 100000 -r $sim_refs -o $PROJ/testing/out-wgsim \
 	| grep 'Submitted batch job' | awk '{print $NF}' > $PROJ/testing/out-wgsim/jobids.tmp
 
 # TODO: replace with slurm wait loop
@@ -25,7 +25,7 @@ cat $PROJ/testing/out-wgsim/*1.fastq > $PROJ/testing/out-wgsim/merged_1.fastq
 cat $PROJ/testing/out-wgsim/*2.fastq > $PROJ/testing/out-wgsim/merged_2.fastq
 
 # align simulated fastqs
-sbatch $PROJ/deprecated/filter-and-align.sh -1 $PROJ/testing/out-wgsim/merged_1.fastq -2 $PROJ/testing/out-wgsim/merged_1.fastq -d $refdirs -u $PROJ/data/univec/UniVec_Core.fa -o $PROJ/testing/out-align
+sbatch $PROJ/archive/filter-and-align.sh -1 $PROJ/testing/out-wgsim/merged_1.fastq -2 $PROJ/testing/out-wgsim/merged_1.fastq -d $refdirs -u $PROJ/data/univec/UniVec_Core.fa -o $PROJ/testing/out-align
 	| grep 'Submitted batch job' | awk '{print $NF}' > $PROJ/testing/out-align/jobids.tmp
 
 # TODO: replace with slurm wait loop
