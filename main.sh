@@ -109,10 +109,17 @@ PROJ="/gpfs/commons/home/apandit/gghome/lions"
 TEMP="/nfs/scratch/$outdir"
 TEMPSHARE="/nfs/scratch/results/shared"
 BIN="$PROJ/bin"
+fastq_sim_outdir="$outdir/fastqs"
+bamdir="$outdir/bamfiles"
+analysis_dir="$outdir/analysis"
 
 mkdir -p $outdir
 mkdir -p $TEMP
 mkdir -p $TEMPSHARE
+mkdir -p $fastq_sim_outdir
+mkdir -p $bamdir
+mkdir -p $analysis_dir
+
 
 # =====                     =====
 # ===== Actual Script Logic =====
@@ -146,21 +153,23 @@ for ext in fa fna fasta; do
         fi
     done
 
-    while read -r row; do
-        simref=$(echo $row | col1)
+    if [[ $FLAG_SIMULATION_MODE -ne 0 ]]; then 
+        while read -r row; do
+            simref=$(echo $row | col1)
 
-        if ! grep -q $simref $non_indexed_refs; then
+            if ! grep -q $simref $non_indexed_refs; then
 
-            if [[ ! -f "${simref}.bwt" ]]; then
-                echo $simref >> $non_indexed_refs
+                if [[ ! -f "${simref}.bwt" ]]; then
+                    echo $simref >> $non_indexed_refs
+                fi
+                simref_base=$(basename $simref)
+                if [[ ! -f "$TEMPSHARE/$simref_base" ]]; then
+                    rsync -L $simref* $TEMPSHARE
+                fi
+
             fi
-            simref_base=$(basename $simref)
-            if [[ ! -f "$TEMPSHARE/$simref_base" ]]; then
-                rsync -L $simref* $TEMPSHARE
-            fi
-
-        fi
-    done < $simrefs
+        done < $simrefs
+    fi
 done
 
 #
@@ -185,9 +194,6 @@ if [[ FLAG_SIMULATION_MODE -eq 1 ]]; then
 
     arr_size=$(count_lines $simrefs)
 
-    fastq_sim_outdir="$outdir/fastq-sim"
-    mkdir -p $fastq_sim_outdir
-
     # simulate appropriate amount of reads for each reference, work in TEMP
     echo "Queued: Simulating reads from $arr_size references"
     sim_jobID=$(sbatch --array=1-$arr_size $BIN/simulate-reads.sh $simrefs $numpairs $TEMPSHARE $TEMP | col4)
@@ -205,21 +211,26 @@ if [[ FLAG_SIMULATION_MODE -eq 1 ]]; then
     read1=$TEMP/merged_raw_1.fastq
     read2=$TEMP/merged_raw_2.fastq
     # already defined if not in simulation mode
+
+    #
+    # 5. filter/align against univec
+    #
+
+    # align/filter raw reads against univec, work in TEMP, copy results to fastq_sim_outdir
+
+    filter_univec_jobID=$(sbatch --dependency=afterok:$concat_jobID $BIN/filter-against-univec.sh $read1 $read2 $TEMP $fastq_sim_outdir | col4)
+else
+    filter_univec_jobID=$(sbatch $BIN/filter-against-univec.sh $read1 $read2 $TEMP $fastq_sim_outdir | col4)
+    ln -s $read1 $fastq_sim_outdir
+    ln -s $read2 $fastq_sim_outdir
 fi
 
-#
-# 5. filter/align against univec
-#
-
-# align/filter raw reads against univec, work in TEMP, copy results to fastq_sim_outdir
 echo "Queued: Filtering reads against univec..."
-filter_univec_jobID=$(sbatch --dependency=afterok:$concat_jobID $BIN/filter-against-univec.sh $read1 $read2 $TEMP $fastq_sim_outdir | col4)
-
 filtered1=$fastq_sim_outdir/filtered_1.fastq
 filtered2=$fastq_sim_outdir/filtered_2.fastq
 
 #
-# 5. align filtered reads to references
+# 6. align filtered reads to references
 #
 
 reflist=$TEMP/reflist.txt
@@ -232,9 +243,6 @@ for ext in fa fna fasta; do
 done
 
 arr_size=$(count_lines $reflist)
-bamdir="$outdir/bamfiles"
-mkdir -p $bamdir
-
 
 echo "Queued: Aligning reads to all references..."
 # align filtered reads to each reference in parallel, work in TEMP for speed, publish outputs to bamdir
@@ -245,11 +253,8 @@ else
 fi
 
 #
-# 6. extract top alignments
+# 7. extract top alignments
 #
-
-analysis_dir="$outdir/analysis"
-mkdir -p $analysis_dir
 
 # assign reads, work in TEMP for speed, publish outputs to analysis
 echo "Queued: Assigning reads to reference of origin by alignment score..."

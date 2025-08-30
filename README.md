@@ -11,11 +11,15 @@ A pipeline designed to:
 ## Usage
 
 This pipeline can either be ran with a set of post-QC paired-end reads or with a TSV containing a 'recipe' for simulating FASTQ
-generation with `wgsim`. Note that arguments in square brackets are optional. Running this 
+generation with `wgsim`. Note that arguments in square brackets are optional.
 
-Running with existing FASTQs: `bash main.nf  -d <reference directory> -1 <first paired FASTQ> -2 <second paired FASTQ>`
+Running with existing FASTQs:
 
-Running with FASTQ simulation: `bash main.nf -d <reference directory> -s <path to CSV/TSV recipe> [-n <read pair count>]`
+```bash main.nf  -d <reference directory> -1 <first paired FASTQ> -2 <second paired FASTQ>```
+
+Running with FASTQ simulation:
+
+```bash main.nf -d <reference directory> -s <path to CSV/TSV recipe> [-n <read pair count>]```
 
 ## Arguments
 
@@ -52,7 +56,7 @@ results/
 │   │   ├── species1.bam
 │   │   └── ...
 │   │
-│   └── fastq-sim/
+│   └── fastqs/
 │       ├── blend_metadata.tsv
 │       ├── filtered_1.fastq
 │       ├── filtered_2.fastq
@@ -62,44 +66,30 @@ results/
 ...
 ```
 
-### `timestamped-run-output/`
+#### `timestamped-run-output/`
 Each run of the pipeline will generate its results in its own timestamped directory, formatted as `YYYY-MM-DD_hh-mm-ss`.
+Optionally includes run label if passed with `-r`, formatted as `YYYY-MM-DD_hh-mm-ss-label`
 
-### `fastq-sim/`
+#### `fastqs/`
 This subdirectory contains FASTQ files after univec filtering and if applicable, simulation. Simulated fastqs are 
-`merged_raw_{1,2}.fastq`, with post-univec filtering being `filtered_{1,2}.fastq`. 
+`merged_raw_{1,2}.fastq`, with post-univec filtering being `filtered_{1,2}.fastq`. If -1/2 are passed, symbolic links to
+the original FASTQs will be included instead of `merged_raw_{1,2}.fastq`.
 
 If simulated fastqs are generated, a `blend_metadata.tsv` file will be generated as well, detailing what proportion and 
 the raw number of read pairs each reference fasta contributed to the pair.
 
-### `bamfiles/`
+#### `bamfiles/`
 This subdirectory contains the bam files generated after aligning `filtered_{1,2}.fastq` in the above directory to each
 reference genome provided. The bamfiles inherit the base file name of their reference files.
 
-### `analysis/`
+#### `analysis/`
 This subdirectory contains the analysis results of each bamfile. A global file top-alignments.csv is generated, where reads
 that met MAPQ and NM quality criteria for *all references* are included, with MAPQ, NM, AS, and reference of origin are all reported
 for the top two aligning references.
 
-`{reference}-unique-raw.csv`: Contains data by species for reads that uniquely aligned to 
+`{reference}-unique-raw.csv`: Read, AS, MAPQ, NM for all reads that uniquely map to {reference}.
 
+`{reference}-unique-top-alignments.csv`: Top 2 AS, MAPQ, NM, and reference for reads that uniquely mapped to reference.
+Must pass MAPQ and NM thresholds for both references.
 
-## Project Directory Structure
-
-### `bin/`
-
-A directory containing external scripts and/or binaries used for this pipeline. Currently only contains `assign-reads.py`, 
-an external python script that extracts alignment scores for each intermediate bam produced in alignment.
-
-*Note: this script relies on the python/3.12.3 cluster module having the polars library installed. Currently this is the case,
-but ideally this would be changed to a conda environment or better, a docker container for robustness.*
-
-### `data/`
-
-A general purpose directory for storing data related to this project, whether it be supplemental files or a reference genome 
-directory. 
-
-If the `--univec_fasta` argument is not provided on pipeline execution, the univec fasta file will be downloaded to 
-`data/univec/UniVec_Core.fa` and indexed with `bwa index` in that location further downstream.
-
-
+`top-alignments.csv`: Top 2 AS, MAPQ, NM, and reference for all reads provided they pass the MAPQ and NM thresholds for both references.
